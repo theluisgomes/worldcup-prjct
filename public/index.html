@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Motor Analítico — Copa do Mundo FIFA</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0d0d0d;
+      --surface:  #161616;
+      --border:   #2a2a2a;
+      --accent:   #00a650;
+      --accent-d: #008040;
+      --text:     #e8e8e8;
+      --muted:    #888;
+      --user-bg:  #1a2a1a;
+      --bot-bg:   #161616;
+      --r:        10px;
+      --font:     'Inter', system-ui, sans-serif;
+    }
+
+    html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font); }
+
+    /* ── Layout ── */
+    .shell { display: flex; flex-direction: column; height: 100vh; max-width: 900px; margin: 0 auto; }
+
+    /* ── Header ── */
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 20px; border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .logo { display: flex; align-items: center; gap: 10px; }
+    .logo svg { color: var(--accent); }
+    .logo-text { font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+    .logo-sub { font-size: 11px; color: var(--muted); margin-top: 1px; }
+
+    .sources { display: flex; gap: 6px; flex-wrap: wrap; }
+    .badge {
+      font-size: 10px; padding: 3px 8px; border-radius: 20px; font-weight: 500;
+      background: #1a1a1a; border: 1px solid var(--border); color: var(--muted);
+      transition: all .2s;
+    }
+    .badge.on { border-color: var(--accent); color: var(--accent); background: #0d1f14; }
+
+    /* ── Chat area ── */
+    #chat {
+      flex: 1; overflow-y: auto; padding: 24px 20px;
+      display: flex; flex-direction: column; gap: 20px;
+    }
+
+    .msg { display: flex; flex-direction: column; gap: 6px; max-width: 100%; }
+    .msg-label { font-size: 11px; color: var(--muted); font-weight: 500; }
+
+    .bubble {
+      padding: 14px 16px; border-radius: var(--r); line-height: 1.65;
+      font-size: 14px; word-break: break-word;
+    }
+    .user .bubble  { background: var(--user-bg); border: 1px solid #1e3a1e; align-self: flex-end; max-width: 80%; }
+    .user .msg-label { align-self: flex-end; }
+    .bot .bubble   { background: var(--bot-bg); border: 1px solid var(--border); }
+
+    /* markdown inside bot bubble */
+    .bubble table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 13px; }
+    .bubble th, .bubble td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; }
+    .bubble th { background: #1e1e1e; color: var(--accent); font-weight: 600; }
+    .bubble tr:nth-child(even) td { background: #111; }
+    .bubble p { margin: 8px 0; }
+    .bubble p:first-child { margin-top: 0; }
+    .bubble p:last-child  { margin-bottom: 0; }
+    .bubble strong { color: #fff; }
+    .bubble h3 { font-size: 13px; font-weight: 700; margin: 12px 0 6px; color: var(--accent); text-transform: uppercase; letter-spacing: .04em; }
+    .bubble blockquote { border-left: 3px solid var(--border); padding-left: 10px; color: var(--muted); margin: 6px 0; }
+    .bubble code { background: #222; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+
+    /* typing indicator */
+    .typing { display: flex; align-items: center; gap: 5px; padding: 14px 16px; }
+    .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: bounce .9s infinite; }
+    .dot:nth-child(2) { animation-delay: .15s; }
+    .dot:nth-child(3) { animation-delay: .30s; }
+    @keyframes bounce { 0%,80%,100% { transform: translateY(0); } 40% { transform: translateY(-6px); } }
+
+    /* ── Input bar ── */
+    .input-bar {
+      padding: 14px 20px 18px;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .input-wrap {
+      display: flex; gap: 10px; align-items: flex-end;
+      background: #1a1a1a; border: 1px solid var(--border);
+      border-radius: var(--r); padding: 10px 12px;
+      transition: border-color .2s;
+    }
+    .input-wrap:focus-within { border-color: var(--accent); }
+
+    #input {
+      flex: 1; background: none; border: none; outline: none;
+      color: var(--text); font-family: var(--font); font-size: 14px;
+      resize: none; max-height: 140px; line-height: 1.5;
+    }
+    #input::placeholder { color: var(--muted); }
+
+    #send-btn {
+      background: var(--accent); border: none; border-radius: 6px;
+      padding: 7px 14px; color: #000; font-weight: 700; font-size: 13px;
+      cursor: pointer; transition: background .2s; white-space: nowrap;
+      align-self: flex-end;
+    }
+    #send-btn:hover:not(:disabled) { background: var(--accent-d); }
+    #send-btn:disabled { opacity: .4; cursor: default; }
+
+    .hint { font-size: 11px; color: var(--muted); margin-top: 8px; text-align: center; }
+
+    /* ── Empty state ── */
+    .empty {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 24px; padding: 40px 20px;
+    }
+    .empty-icon { font-size: 48px; }
+    .empty h2 { font-size: 20px; font-weight: 600; text-align: center; }
+    .empty p { font-size: 13px; color: var(--muted); text-align: center; max-width: 480px; line-height: 1.7; }
+    .suggestions { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 560px; }
+    .sug {
+      padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--r);
+      cursor: pointer; font-size: 13px; color: var(--muted);
+      transition: all .2s; text-align: left; background: var(--surface);
+    }
+    .sug:hover { border-color: var(--accent); color: var(--text); }
+
+    /* scrollbar */
+    #chat::-webkit-scrollbar { width: 4px; }
+    #chat::-webkit-scrollbar-track { background: transparent; }
+    #chat::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+  </style>
+</head>
+<body>
+<div class="shell">
+  <header>
+    <div class="logo">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+        <path d="M2 12h20"/>
+      </svg>
+      <div>
+        <div class="logo-text">Motor Analítico Copa do Mundo</div>
+        <div class="logo-sub">Histórico 1930–2022 · Dados ao vivo · Notícias · Social</div>
+      </div>
+    </div>
+    <div class="sources" id="sources">
+      <span class="badge" id="b-football-data">football-data</span>
+      <span class="badge" id="b-api-football">api-football</span>
+      <span class="badge" id="b-rss">rss</span>
+      <span class="badge" id="b-newsapi">newsapi</span>
+      <span class="badge" id="b-reddit">reddit</span>
+      <span class="badge" id="b-twitter">twitter</span>
+    </div>
+  </header>
+
+  <div id="chat">
+    <div class="empty" id="empty">
+      <div class="empty-icon">⚽</div>
+      <h2>O que você quer saber sobre a Copa?</h2>
+      <p>Faça consultas analíticas sobre dados históricos (1930–2022), resultados ao vivo, artilharia, escalações, cobertura jornalística e sentimento social.</p>
+      <div class="suggestions">
+        <button class="sug" onclick="suggest(this)">Quais seleções têm mais títulos mundiais na história?</button>
+        <button class="sug" onclick="suggest(this)">Qual foi a Copa com mais gols marcados por partida?</button>
+        <button class="sug" onclick="suggest(this)">Compare o desempenho de Brasil, Alemanha e Argentina em finais.</button>
+        <button class="sug" onclick="suggest(this)">O que a imprensa está falando sobre a Copa do Mundo 2026?</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="input-bar">
+    <div class="input-wrap">
+      <textarea id="input" rows="1" placeholder="Faça uma consulta analítica..."></textarea>
+      <button id="send-btn" onclick="send()">Enviar</button>
+    </div>
+    <div class="hint">Enter para enviar · Shift+Enter para nova linha</div>
+  </div>
+</div>
+
+<script>
+  const chatEl = document.getElementById('chat');
+  const inputEl = document.getElementById('input');
+  const sendBtn = document.getElementById('send-btn');
+  const emptyEl = document.getElementById('empty');
+
+  let history = [];
+  let busy = false;
+
+  // ── auto-resize textarea ──────────────────────────────────────
+  inputEl.addEventListener('input', () => {
+    inputEl.style.height = 'auto';
+    inputEl.style.height = Math.min(inputEl.scrollHeight, 140) + 'px';
+  });
+  inputEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+  });
+
+  // ── fetch source status ───────────────────────────────────────
+  async function loadStatus() {
+    try {
+      const r = await fetch('/api/status');
+      const s = await r.json();
+      const map = {
+        'football-data': s.football_data,
+        'api-football': s.api_football,
+        rss: s.rss,
+        newsapi: s.newsapi,
+        reddit: s.reddit,
+        twitter: s.twitter,
+      };
+      Object.entries(map).forEach(([k, v]) => {
+        const el = document.getElementById(`b-${k}`);
+        if (el) el.classList.toggle('on', v);
+      });
+    } catch (_) {}
+  }
+
+  // ── render markdown ───────────────────────────────────────────
+  function md(text) {
+    return marked.parse(text, { breaks: true, gfm: true });
+  }
+
+  // ── add message bubble ────────────────────────────────────────
+  function addMsg(role, content) {
+    if (emptyEl) emptyEl.remove();
+    const div = document.createElement('div');
+    div.className = `msg ${role}`;
+    const label = document.createElement('div');
+    label.className = 'msg-label';
+    label.textContent = role === 'user' ? 'Você' : 'Motor Analítico';
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    if (role === 'bot') bubble.innerHTML = md(content);
+    else bubble.textContent = content;
+    div.appendChild(label);
+    div.appendChild(bubble);
+    chatEl.appendChild(div);
+    chatEl.scrollTop = chatEl.scrollHeight;
+    return bubble;
+  }
+
+  // ── typing indicator ──────────────────────────────────────────
+  function addTyping() {
+    if (emptyEl) emptyEl.remove();
+    const div = document.createElement('div');
+    div.className = 'msg bot';
+    div.id = 'typing';
+    const label = document.createElement('div');
+    label.className = 'msg-label';
+    label.textContent = 'Motor Analítico';
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble typing';
+    bubble.innerHTML = '<div class="dot"></div><div class="dot"></div><div class="dot"></div>';
+    div.appendChild(label);
+    div.appendChild(bubble);
+    chatEl.appendChild(div);
+    chatEl.scrollTop = chatEl.scrollHeight;
+    return div;
+  }
+
+  // ── send ──────────────────────────────────────────────────────
+  async function send() {
+    const text = inputEl.value.trim();
+    if (!text || busy) return;
+
+    busy = true;
+    sendBtn.disabled = true;
+    inputEl.value = '';
+    inputEl.style.height = 'auto';
+
+    addMsg('user', text);
+    const typingEl = addTyping();
+
+    let accumulated = '';
+    let botBubble = null;
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text, history }),
+      });
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        for (const line of chunk.split('\n')) {
+          if (!line.startsWith('data: ')) continue;
+          const payload = line.slice(6);
+          if (payload === '[DONE]') break;
+          try {
+            const { delta } = JSON.parse(payload);
+            accumulated += delta;
+            if (!botBubble) {
+              typingEl.remove();
+              const div = document.createElement('div');
+              div.className = 'msg bot';
+              const label = document.createElement('div');
+              label.className = 'msg-label';
+              label.textContent = 'Motor Analítico';
+              botBubble = document.createElement('div');
+              botBubble.className = 'bubble';
+              div.appendChild(label);
+              div.appendChild(botBubble);
+              chatEl.appendChild(div);
+            }
+            botBubble.innerHTML = md(accumulated);
+            chatEl.scrollTop = chatEl.scrollHeight;
+          } catch (_) {}
+        }
+      }
+
+      history.push({ role: 'user', content: text });
+      history.push({ role: 'assistant', content: accumulated });
+
+    } catch (err) {
+      typingEl.remove();
+      addMsg('bot', `Erro ao processar consulta: ${err.message}`);
+    }
+
+    busy = false;
+    sendBtn.disabled = false;
+    inputEl.focus();
+  }
+
+  function suggest(btn) {
+    inputEl.value = btn.textContent.trim();
+    send();
+  }
+
+  loadStatus();
+</script>
+</body>
+</html>
